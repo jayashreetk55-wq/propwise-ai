@@ -2,6 +2,8 @@ import { app } from './app';
 import { config } from './config';
 import { logger } from './utils/logger';
 
+import { disconnectDatabase } from './database';
+
 const server = app.listen(config.port, () => {
   logger.info(`========================================================`);
   logger.info(`  PropWise AI Backend Service Running`);
@@ -11,8 +13,10 @@ const server = app.listen(config.port, () => {
   logger.info(`========================================================`);
 });
 
-const gracefulShutdown = (signal: string): void => {
+const gracefulShutdown = async (signal: string): Promise<void> => {
   logger.warn(`Received ${signal}. Initiating graceful shutdown...`);
+
+  await disconnectDatabase();
 
   server.close(() => {
     logger.info('HTTP server closed. Exiting process.');

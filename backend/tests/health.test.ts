@@ -26,6 +26,18 @@ describe('GET /api/v1/health', () => {
     expect(data.system.nodeVersion).toBeDefined();
     expect(data.system.platform).toBeDefined();
     expect(typeof data.system.memoryUsageMB.heapUsed).toBe('number');
+
+    // Database health diagnostics (handles offline / disconnected gracefully)
+    expect(data.database).toBeDefined();
+    expect(['connected', 'disconnected']).toContain(data.database.status);
+    expect(typeof data.database.message).toBe('string');
+  });
+
+  it('should remain functional and return 200 even when database is offline', async () => {
+    const res = await request(app).get('/api/v1/health');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.status).toBe('healthy');
   });
 
   it('should return service metadata on root path GET /', async () => {

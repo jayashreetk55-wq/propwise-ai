@@ -42,6 +42,12 @@ export class ValidationError extends AppError {
   }
 }
 
+export class ConflictError extends AppError {
+  constructor(message: string = 'Resource already exists', details?: unknown) {
+    super(message, HttpStatusCodes.CONFLICT, 'CONFLICT', details);
+  }
+}
+
 export class UnauthorizedError extends AppError {
   constructor(message: string = 'Unauthorized', details?: unknown) {
     super(message, HttpStatusCodes.UNAUTHORIZED, 'UNAUTHORIZED', details);

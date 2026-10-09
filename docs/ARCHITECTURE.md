@@ -2,7 +2,7 @@
 
 > **Platform Vision**: Intelligent Real Estate Discovery, Investment & Risk Analysis Platform  
 > **Author**: Senior Backend & Systems Architect  
-> **Status**: Phase 1 Foundation Approved  
+> **Status**: Phase 2 Database Foundation Complete  
 
 ---
 
@@ -35,28 +35,28 @@ graph TB
         VAL["Validation & Sanitization<br/>(Zod Middleware)"]
         CTRL["Controllers & Routing"]
         SRV["Business Service Layer"]
+        DBMOD["Database Layer<br/>(Prisma Client Singleton)"]
         ERR["Centralized Error Pipeline"]
         
-        API --> VAL --> CTRL --> SRV
+        API --> VAL --> CTRL --> SRV --> DBMOD
         CTRL -.-> ERR
     end
 
     subgraph Data Tier ["Persistence Tier (PostgreSQL)"]
-        ORM["Prisma ORM Client"]
-        DB[("PostgreSQL 16+<br/>Properties, Users, Metrics")]
-        SRV --> ORM --> DB
+        DB[("PostgreSQL 16+<br/>Normalized Real Estate Schema")]
+        DBMOD --> DB
     end
 
     subgraph AI Service Tier ["Intelligence Tier (Python / FastAPI)"]
-        Fклон["FastAPI Microservice<br/>(Python 3.11+)"]
+        FAST["FastAPI Microservice<br/>(Python 3.11+)"]
         NLP["Semantic Search Engine<br/>(Embeddings / Vector Ranker)"]
         ANOM["Anomaly Detection<br/>(IsolationForest / scikit-learn)"]
         VALU["Valuation & Yield Predictor<br/>(Regressors / Analytics)"]
         
-        SRV -- "Internal REST / JSON" --> Fклон
-        Fклон --> NLP
-        Fклон --> ANOM
-        Fклон --> VALU
+        SRV -- "Internal REST / JSON" --> FAST
+        FAST --> NLP
+        FAST --> ANOM
+        FAST --> VALU
     end
 
     UI -- "HTTPS / JSON (REST)" --> API
@@ -80,39 +80,275 @@ graph TB
   * **API Gateway & Routing**: Exposes modular, versioned REST endpoints (`/api/v1`).
   * **Input Validation & Sanitization**: Validates all headers, query parameters, URL params, and JSON payloads via Zod before hitting business logic.
   * **Business Logic & Workflow Orchestration**: Executes domain rules (investment calculators, comparison logic, user workflows).
-  * **Data Access**: Interfaces with PostgreSQL via Prisma ORM for ACID transactions, pagination, and relations.
+  * **Data Access & Abstraction**: Interfaces with PostgreSQL via Prisma ORM for ACID transactions, pagination, and relations.
   * **AI Service Client**: Acts as an HTTP client proxying requests to the Python AI service, enforcing timeouts, fallbacks, and caching.
-  * **Cross-Cutting Concerns**: Centralized error mapping, request logging, security headers (Helmet), CORS policies, and health monitoring.
+  * **Cross-Cutting Concerns**: Centralized error mapping, request logging, security headers (Helmet), CORS policies, and non-blocking database health monitoring.
 
-### 3.3 Relational Database (PostgreSQL + Prisma ORM)
+### 3.3 Relational Database (PostgreSQL 16+ & Prisma ORM)
 * **Scope**: Persistent system of record.
 * **Responsibilities**:
-  * Structured storage for listings, agent details, historical price changes, neighborhoods, users, and saved searches.
-  * Strong relational integrity and indexing on geographic coordinates, pricing ranges, and timestamps.
-  * Migration management using Prisma Schema-as-Code.
+  * Normalized data modeling across 10 core real estate entities.
+  * Strict decimal-safe representation of currency and property dimensions.
+  * Enforcing unique constraints (e.g., duplicate favorite prevention).
+  * Geospatial coordinate storage and compound indexing for multi-attribute property search.
+  * Reproducible schema migrations managed via Prisma Migration Engine.
 
 ### 3.4 AI/ML Intelligence Service (Python + FastAPI + scikit-learn)
 * **Scope**: Specialized microservice for heavy scientific computing and ML inferences.
 * **Responsibilities**:
-  * **Natural-Language Search**: Parsing unstructured user queries (e.g., *"quiet 3-bed craftsman near top public schools with strong rental upside"*) into semantic vector spaces.
-  * **Anomaly Detection**: Training and serving Isolation Forest or autoencoder models to detect listing discrepancies (unrealistic rent, price outliers, fraudulent metadata).
+  * **Natural-Language Search**: Parsing unstructured user queries into semantic vector spaces.
+  * **Anomaly Detection**: Training and serving Isolation Forest or autoencoder models to detect listing discrepancies.
   * **Valuation & Yield Modeling**: Running feature engineering pipelines and regression models to estimate fair market value and projected cap rates.
   * **Explainability Engine**: Providing feature importance attribution (e.g., SHAP values or score breakdowns) to explain *why* a property was recommended.
 
 ---
 
-## 4. Inter-Service Communication Protocols
+## 4. Database Architecture & Data Models (Phase 2 Foundation)
 
-| Channel | Protocols | Format | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Frontend ↔ Backend** | HTTPS (REST) | JSON | User interactions, authenticated requests, CRUD, dashboard aggregates |
-| **Backend ↔ Database** | PostgreSQL TCP | Binary wire protocol | High-performance ORM queries, transactions, connection pooling |
-| **Backend ↔ AI Service** | HTTP/1.1 (Internal) | JSON | Model inferences, NLP parsing, score attribution |
+### 4.1 Entity Relationship Diagram (ERD)
 
-### 4.1 Frontend ↔ Backend Communication Contract
-All responses emitted by the Express backend adhere to a standardized envelope contract:
+```mermaid
+erDiagram
+    User ||--o{ Property : "creates / lists"
+    User ||--o| UserPreference : "defines"
+    User ||--o{ Favorite : "saves"
+    User ||--o{ PropertyView : "views"
 
-#### Success Envelope (`ApiResponseSuccess<T>`)
+    Property ||--o{ PropertyImage : "contains"
+    Property ||--o{ PropertyAmenity : "features"
+    Amenity ||--o{ PropertyAmenity : "categorized in"
+    Property ||--o{ Favorite : "saved by"
+    Property ||--o{ PropertyView : "logs"
+    Property ||--o{ PropertyPriceHistory : "tracks"
+    Property ||--o{ PropertyAnalysis : "evaluated by"
+
+    User {
+        string id PK "UUID"
+        string email UK
+        string firstName
+        string lastName
+        string phone
+        UserRole role "BUYER | INVESTOR | AGENT | ADMIN"
+        boolean isActive
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    UserPreference {
+        string id PK "UUID"
+        string userId FK, UK
+        ListingType listingType "SALE | RENT"
+        decimal budgetMin "DECIMAL(14,2)"
+        decimal budgetMax "DECIMAL(14,2)"
+        string_array preferredCities
+        string_array preferredLocalities
+        int_array bedrooms
+        PropertyType_array propertyTypes
+        decimal minAreaSqFt "DECIMAL(10,2)"
+        decimal maxAreaSqFt "DECIMAL(10,2)"
+        jsonb lifestylePreferences
+        jsonb investmentPreferences
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    Property {
+        string id PK "UUID"
+        string title
+        text description
+        PropertyType propertyType "APARTMENT | VILLA | CONDO..."
+        ListingType listingType "SALE | RENT"
+        PropertyStatus status "AVAILABLE | SOLD | RENTED..."
+        decimal price "DECIMAL(14,2)"
+        string currency
+        decimal areaSqFt "DECIMAL(10,2)"
+        int bedrooms
+        decimal bathrooms "DECIMAL(3,1)"
+        FurnishingStatus furnishing "UNFURNISHED | SEMI | FULLY"
+        string city
+        string locality
+        string address
+        string zipCode
+        decimal latitude "DECIMAL(10,7)"
+        decimal longitude "DECIMAL(10,7)"
+        int yearBuilt
+        string createdById FK
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    PropertyImage {
+        string id PK "UUID"
+        string propertyId FK
+        string url
+        string caption
+        boolean isPrimary
+        int displayOrder
+        datetime createdAt
+    }
+
+    Amenity {
+        string id PK "UUID"
+        string name UK
+        string slug UK
+        AmenityCategory category "LIFESTYLE | SECURITY | FITNESS..."
+        string icon
+        datetime createdAt
+    }
+
+    PropertyAmenity {
+        string id PK "UUID"
+        string propertyId FK
+        string amenityId FK
+        datetime createdAt
+    }
+
+    Favorite {
+        string id PK "UUID"
+        string userId FK
+        string propertyId FK
+        string notes
+        datetime createdAt
+    }
+
+    PropertyView {
+        string id PK "UUID"
+        string propertyId FK
+        string userId FK
+        string ipAddress
+        string userAgent
+        int viewDurationSeconds
+        datetime createdAt
+    }
+
+    PropertyPriceHistory {
+        string id PK "UUID"
+        string propertyId FK
+        decimal previousPrice "DECIMAL(14,2)"
+        decimal newPrice "DECIMAL(14,2)"
+        decimal changePercentage "DECIMAL(6,2)"
+        string reason
+        datetime effectiveDate
+        datetime createdAt
+    }
+
+    PropertyAnalysis {
+        string id PK "UUID"
+        string propertyId FK
+        AnalysisType analysisType "INVESTMENT_YIELD | ANOMALY..."
+        decimal score "DECIMAL(6,2)"
+        decimal confidenceScore "DECIMAL(5,4)"
+        boolean isAiEstimated "Default: true"
+        boolean isVerified "Default: false"
+        string modelVersion
+        jsonb structuredExplanation
+        datetime createdAt
+        datetime updatedAt
+    }
+```
+
+### 4.2 Key Architectural Decisions in Data Modeling
+
+1. **Decimal-Safe Financial Representation**:
+   * All monetary figures (`price`, `previousPrice`, `newPrice`, `budgetMin`, `budgetMax`) use `@db.Decimal(14, 2)`. This provides safe calculations up to $999 billion without binary floating-point rounding errors.
+   * `areaSqFt` and `minAreaSqFt` use `@db.Decimal(10, 2)`.
+   * `bathrooms` uses `@db.Decimal(3, 1)` to accurately record half-baths (e.g. `2.5`).
+2. **Preventing Duplicate Favorites**:
+   * The `Favorite` table enforces a compound unique constraint: `@@unique([userId, propertyId])`. This eliminates duplicate bookmarking at the database engine level.
+3. **AI Estimation Boundary & Transparency**:
+   * The `PropertyAnalysis` model explicitly features:
+     * `isAiEstimated: Boolean @default(true)`
+     * `isVerified: Boolean @default(false)`
+     * `confidenceScore: Decimal(5, 4)`
+     * `modelVersion: String`
+     * `structuredExplanation: Json`
+   * **Rule**: AI-generated scores and metrics are never treated as verified ground truth. The UI and consumers must always present them as statistical inferences with transparent explanations.
+4. **Referential Integrity & Cascading Policies**:
+   * When a `Property` is removed, all dependent `PropertyImage`, `PropertyAmenity`, `Favorite`, `PropertyView`, `PropertyPriceHistory`, and `PropertyAnalysis` records cascade deletion (`onDelete: Cascade`).
+   * When a `User` is deleted, their `UserPreference` and `Favorite` records cascade, while created properties set their owner to `null` (`onDelete: SetNull`) to retain listing history.
+5. **High-Performance Composite Indexing**:
+   * `properties`: Indexed by `[city, locality]`, `[price]`, `[propertyType, listingType, status]`, and `[bedrooms, bathrooms]`.
+   * `property_analyses`: Indexed by `[propertyId, analysisType]` and `[analysisType, score]`.
+
+---
+
+## 5. Database Operations, Migrations & Resilience
+
+### 5.1 Environment Configuration
+The database connection string is configured via the `DATABASE_URL` environment variable:
+
+```env
+# Format: postgresql://<USER>:<PASSWORD>@<HOST>:<PORT>/<DATABASE>?schema=<SCHEMA>
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/propwise_db?schema=public
+```
+
+* Safe template: Provided in [`backend/.env.example`](backend/.env.example). Real database credentials must never be committed to Git.
+
+### 5.2 Local PostgreSQL Setup Options
+
+#### Option A: Docker (Recommended)
+```bash
+docker run --name propwise-postgres \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=propwise_db \
+  -p 5432:5432 -d postgres:16-alpine
+```
+
+#### Option B: macOS Homebrew
+```bash
+brew install postgresql@16
+brew services start postgresql@16
+createdb propwise_db
+```
+
+### 5.3 Migration & Seeding Commands
+
+```bash
+# Generate Prisma Client (offline, zero DB connection required)
+npm run prisma:generate
+
+# Apply migrations in development (requires running PostgreSQL)
+npm run prisma:migrate:dev
+
+# Apply migrations in staging/production CI
+npm run prisma:migrate:deploy
+
+# Inspect migration status
+npm run prisma:migrate:status
+
+# Seed master amenities and sample properties
+npm run prisma:seed
+
+# Open interactive Prisma Studio GUI
+npm run prisma:studio
+```
+
+### 5.4 Resilient Offline Database Handling
+
+A critical architectural principle of PropWise AI is that **an unavailable database must never crash the backend or break test suites**:
+
+1. **Lazy Connection Pool**: Prisma initializes database connections lazily upon query execution rather than at server boot.
+2. **Non-Blocking Health Probe**: The `checkDatabaseHealth()` probe executes `SELECT 1` wrapped with a strict 2-second timeout and an isolated `try/catch`.
+3. **Graceful Status Reporting**: When PostgreSQL is offline or unreachable:
+   * The backend boots normally without unhandled exceptions.
+   * `GET /api/v1/health` returns HTTP 200 OK with:
+     ```json
+     {
+       "status": "healthy",
+       "database": {
+         "status": "disconnected",
+         "message": "PostgreSQL unavailable or offline"
+       }
+     }
+     ```
+   * All unit and integration tests execute and pass without requiring a live PostgreSQL instance.
+
+---
+
+## 6. Inter-Service Communication Contract
+
+### 6.1 Success Envelope (`ApiResponseSuccess<T>`)
 ```json
 {
   "success": true,
@@ -122,7 +358,7 @@ All responses emitted by the Express backend adhere to a standardized envelope c
 }
 ```
 
-#### Error Envelope (`ApiResponseError`)
+### 6.2 Error Envelope (`ApiResponseError`)
 ```json
 {
   "success": false,
@@ -131,8 +367,8 @@ All responses emitted by the Express backend adhere to a standardized envelope c
     "code": "VALIDATION_ERROR",
     "details": [
       {
-        "field": "budget",
-        "message": "Budget must be positive"
+        "field": "budgetMax",
+        "message": "Budget must be a positive number"
       }
     ]
   },
@@ -140,87 +376,28 @@ All responses emitted by the Express backend adhere to a standardized envelope c
 }
 ```
 
-### 4.2 Backend ↔ AI Service Interaction Flow
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as User / Client
-    participant Frontend as React Frontend
-    participant Backend as Node.js / Express Backend
-    participant AI as Python / FastAPI Service
-    participant DB as PostgreSQL Database
-
-    User->>Frontend: Enters query ("3-bed under $1.2M near tech hubs with good rental yield")
-    Frontend->>Backend: POST /api/v1/properties/search (query payload)
-    
-    Backend->>Backend: Validate payload (Zod middleware)
-    Backend->>AI: POST /internal/v1/nlp-search (semantic extraction)
-    
-    AI-->>Backend: Semantic query filters + feature vectors
-    Backend->>DB: Query candidate properties matching filters
-    DB-->>Backend: Return raw candidate properties
-    
-    Backend->>AI: POST /internal/v1/score-and-explain (candidates + user preferences)
-    AI-->>Backend: Ranked property IDs + attribution scores
-    
-    Backend->>Frontend: HTTP 200 OK (Ranked listings + explainable badges)
-    Frontend->>User: Display intelligent property cards with match insights
-```
-
 ---
 
-## 5. Backend Internal Architecture (Phase 1 Foundation)
+## 7. Project Roadmap
 
-The Node.js/Express backend enforces strict layered boundaries to maintain modularity and avoid tight coupling:
-
-```
-backend/
-├── src/
-│   ├── config/              # Validated environment configuration (Zod)
-│   ├── constants/           # HTTP status codes, system constants
-│   ├── controllers/         # Request handling, response orchestration
-│   ├── errors/              # Domain & operational AppError hierarchy
-│   ├── middleware/          # Request logging, validation, 404, error handler
-│   ├── routes/              # Modular API version routing (/api/v1/*)
-│   │   └── v1/              # Version 1 route endpoints
-│   ├── services/            # Pure business logic and domain processing
-│   ├── types/               # TypeScript interfaces and response schemas
-│   ├── utils/               # Standardized API response formatters & logger
-│   ├── app.ts               # Express configuration (decoupled from network listener)
-│   └── server.ts            # Process lifecycle, port listener, graceful shutdown
-├── tests/                   # Automated unit and integration test suite
-├── tsconfig.json            # Strict TypeScript compiler options
-├── vitest.config.mts        # Fast, native TypeScript test runner configuration
-└── package.json             # Scripts, locked dependencies, engines
-```
-
-### Architectural Principles Enforced:
-1. **Decoupled Application & Server**: `app.ts` exports the configured Express application without listening on a TCP socket, enabling deterministic, fast integration testing via Supertest without socket collisions. `server.ts` is the single entry point responsible for process lifecycle and graceful shutdown (`SIGTERM`, `SIGINT`).
-2. **Fail-Fast Configuration**: Environment variables are parsed and validated with Zod at startup. If a required configuration is missing or malformed, the application terminates immediately with actionable error details before accepting traffic.
-3. **Uniform Error Handling**: Custom `AppError` subclasses (`NotFoundError`, `BadRequestError`, `ValidationError`) guarantee that status codes and error codes remain predictable. The centralized error handler captures all synchronous and asynchronous errors, shielding internal stack traces in production.
-4. **Declarative Request Validation**: Zod schemas validate `params`, `query`, and `body` at the middleware boundary. Controllers receive pre-validated, strongly-typed inputs.
-
----
-
-## 6. Development & Deployment Roadmap
-
-* [x] **Phase 1: Architecture & Backend Foundation**
-  * Modular directory structure, TypeScript configuration, build scripts.
-  * Versioned API structure (`/api/v1`), health diagnostic endpoint (`/api/v1/health`).
-  * Centralized error pipeline, Zod request validator, environment loader.
-  * Comprehensive automated testing and architectural documentation.
-* [ ] **Phase 2: Persistence & Data Modeling (Prisma ORM + PostgreSQL)**
-  * Property schema, neighborhood intelligence schema, investor preferences.
-  * Database migrations, seed scripts with realistic property datasets.
-* [ ] **Phase 3: Core Property Discovery APIs**
-  * Filtering, sorting, geospatial queries, pagination, property detail endpoints.
-* [ ] **Phase 4: AI/ML Service Foundation (Python / FastAPI)**
-  * Microservice setup, scikit-learn models for anomaly detection and pricing.
-  * Backend-to-AI internal HTTP client with circuit breaking.
-* [ ] **Phase 5: Financial & Investment Analytics Engine**
-  * Net operating income (NOI), cap rate, cash-on-cash return, mortgage calculation.
-* [ ] **Phase 6: Explainable AI & Comparison Modules**
-  * Recommendation transparency, side-by-side listing comparison engine.
-* [ ] **Phase 7: End-to-End Integration, OpenAPI/Swagger Documentation, CI/CD**
-  * OpenAPI 3.0 specification, Docker compose orchestration, GitHub Actions CI.
+- [x] **Phase 1: Architecture & Backend Foundation**
+  - Modular Express + TypeScript architecture
+  - Versioned API (`/api/v1`) & Health endpoint (`/api/v1/health`)
+  - Centralized error pipeline & Zod schema validation
+  - Safe environment configuration & automated tests
+- [x] **Phase 2: Persistence & Data Modeling (PostgreSQL + Prisma ORM)**
+  - Normalized schema for 10 entities (Properties, Users, Amenities, Pricing, AI Analyses)
+  - Decimal-safe financial fields & unique constraints
+  - Migration script (`20261009000000_init_database_schema`) & rich seed script
+  - Offline-resilient database health probe
+- [ ] **Phase 3: Core Property Discovery APIs**
+  - Filtering, sorting, geospatial queries, pagination, property detail endpoints.
+- [ ] **Phase 4: AI/ML Service Foundation (Python / FastAPI)**
+  - Microservice setup, scikit-learn models for anomaly detection and pricing.
+  - Backend-to-AI internal HTTP client with circuit breaking.
+- [ ] **Phase 5: Financial & Investment Analytics Engine**
+  - Net operating income (NOI), cap rate, cash-on-cash return, mortgage calculation.
+- [ ] **Phase 6: Explainable AI & Comparison Modules**
+  - Recommendation transparency, side-by-side listing comparison engine.
+- [ ] **Phase 7: End-to-End Integration, OpenAPI/Swagger Documentation, CI/CD**
+  - OpenAPI 3.0 specification, Docker compose orchestration, GitHub Actions CI.
