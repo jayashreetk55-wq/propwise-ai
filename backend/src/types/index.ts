@@ -72,6 +72,20 @@ export interface AuthResponseData {
   token: string;
 }
 
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  pagination: PaginationMeta;
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -79,4 +93,5 @@ declare global {
     }
   }
 }
+
 
