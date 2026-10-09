@@ -378,7 +378,29 @@ A critical architectural principle of PropWise AI is that **an unavailable datab
 
 ---
 
-## 7. Project Roadmap
+## 7. Property Management API & Access Control
+
+### 7.1 Endpoints
+* `POST /api/v1/properties`: Protected (Bearer JWT). Creates a listing and assigns ownership (`createdById = req.user.id`).
+* `GET /api/v1/properties`: Public. Paginated listing with multi-attribute filtering:
+  * `page` (default: 1), `limit` (default: 10, max: 100)
+  * Filters: `city`, `locality`, `propertyType`, `listingType`, `status`, `minPrice`, `maxPrice`, `bedrooms`, `furnishing`
+  * Sorting: `sortBy` (`createdAt`, `price`, `areaSqFt`), `sortOrder` (`asc`, `desc`)
+* `GET /api/v1/properties/:id`: Public. Returns full property listing with images, amenities, price history, and safe creator details.
+* `PUT /api/v1/properties/:id`: Protected (Bearer JWT). Updates a listing. Enforces ownership (`property.createdById === req.user.id` or `role === ADMIN`). Automatically records a `PropertyPriceHistory` record if `price` changes.
+* `DELETE /api/v1/properties/:id`: Protected (Bearer JWT). Deletes a listing. Enforces ownership (`property.createdById === req.user.id` or `role === ADMIN`).
+
+### 7.2 Ownership & Role Authorization Matrix
+| Actor | Create Listing | View Listing | Update Own Listing | Update Other's Listing | Delete Own Listing | Delete Other's Listing |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Unauthenticated** | ❌ (401) | ✅ (200) | ❌ (401) | ❌ (401) | ❌ (401) | ❌ (401) |
+| **Listing Owner** | ✅ (201) | ✅ (200) | ✅ (200) | ❌ (403) | ✅ (200) | ❌ (403) |
+| **Non-Owner User** | ✅ (201) | ✅ (200) | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
+| **ADMIN** | ✅ (201) | ✅ (200) | ✅ (200) | ✅ (200) | ✅ (200) | ✅ (200) |
+
+---
+
+## 8. Project Roadmap
 
 - [x] **Phase 1: Architecture & Backend Foundation**
   - Modular Express + TypeScript architecture
@@ -390,8 +412,12 @@ A critical architectural principle of PropWise AI is that **an unavailable datab
   - Decimal-safe financial fields & unique constraints
   - Migration script (`20261009000000_init_database_schema`) & rich seed script
   - Offline-resilient database health probe
-- [ ] **Phase 3: Core Property Discovery APIs**
-  - Filtering, sorting, geospatial queries, pagination, property detail endpoints.
+- [x] **Phase 3: Core Property Discovery & Management APIs**
+  - Property CRUD endpoints with JWT write protection
+  - Multi-attribute filtering (location, price, type, bedrooms) & pagination
+  - Role-based and ownership authorization (Owner / Admin)
+  - Automated price history tracking on updates
+  - Full automated integration test suite (35/35 tests passing)
 - [ ] **Phase 4: AI/ML Service Foundation (Python / FastAPI)**
   - Microservice setup, scikit-learn models for anomaly detection and pricing.
   - Backend-to-AI internal HTTP client with circuit breaking.
@@ -401,3 +427,4 @@ A critical architectural principle of PropWise AI is that **an unavailable datab
   - Recommendation transparency, side-by-side listing comparison engine.
 - [ ] **Phase 7: End-to-End Integration, OpenAPI/Swagger Documentation, CI/CD**
   - OpenAPI 3.0 specification, Docker compose orchestration, GitHub Actions CI.
+

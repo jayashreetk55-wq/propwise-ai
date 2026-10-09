@@ -325,6 +325,18 @@ interface ApiResponseError {
 
 ---
 
+## 🏢 Property Management API (`/api/v1/properties`)
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :---: | :--- |
+| `POST` | `/api/v1/properties` | Bearer JWT | Create listing (auto-associates `createdById = user.id`) |
+| `GET` | `/api/v1/properties` | Public | List with pagination (`page`, `limit`) & filters (`city`, `locality`, `propertyType`, `listingType`, `status`, `minPrice`, `maxPrice`, `bedrooms`, `furnishing`) |
+| `GET` | `/api/v1/properties/:id` | Public | Get single listing with images, amenities, price history |
+| `PUT` | `/api/v1/properties/:id` | Bearer JWT | Update listing (enforces owner or admin role; logs price history on price change) |
+| `DELETE` | `/api/v1/properties/:id` | Bearer JWT | Delete listing (enforces owner or admin role) |
+
+---
+
 ## 🗺️ Project Status & Roadmap
 
 - [x] **Phase 1: Architecture & Backend Foundation**
@@ -333,12 +345,17 @@ interface ApiResponseError {
   - Centralized error pipeline & Zod schema validation
   - Safe environment configuration & automated tests
   - System architecture specification (`docs/ARCHITECTURE.md`)
-- [x] **Phase 2: Database Foundation (PostgreSQL + Prisma ORM)** *(Current)*
+- [x] **Phase 2: Database Foundation (PostgreSQL + Prisma ORM)**
   - Normalized schema for 10 entities (Properties, Users, Amenities, Pricing, AI Analyses)
   - Decimal-safe financial fields & unique constraints
   - Migration script (`20261009000000_init_database_schema`) & rich seed script
   - Offline-resilient database health probe
-- [ ] **Phase 3**: Core Property Discovery & Filter APIs
+- [x] **Phase 3: Core Property Discovery & Management APIs** *(Current)*
+  - Property CRUD endpoints with JWT authentication
+  - Multi-attribute filtering (city, locality, price, type, bedrooms) & pagination
+  - Role-based and ownership authorization (owner / admin)
+  - Automated price history tracking on price updates
+  - 35 automated unit/integration tests passing
 - [ ] **Phase 4**: Python / FastAPI AI Microservice (NLP & Anomaly Detection)
 - [ ] **Phase 5**: Financial & Investment Analytics Engine
 - [ ] **Phase 6**: Neighborhood Intelligence & Comparison Engine
