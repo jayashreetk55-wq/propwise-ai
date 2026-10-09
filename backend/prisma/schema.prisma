@@ -1,0 +1,280 @@
+// ==============================================================================
+// PropWise AI — Relational Database Schema (PostgreSQL + Prisma ORM)
+// Phase 2: Normalized Schema Architecture
+// ==============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------------------
+// Enums
+// ------------------------------------------------------------------------------
+
+enum UserRole {
+  BUYER
+  INVESTOR
+  AGENT
+  ADMIN
+}
+
+enum PropertyType {
+  APARTMENT
+  VILLA
+  INDEPENDENT_HOUSE
+  CONDO
+  TOWNHOUSE
+  PENTHOUSE
+  STUDIO
+  COMMERCIAL
+  PLOT
+}
+
+enum ListingType {
+  SALE
+  RENT
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  UNDER_OFFER
+  SOLD
+  RENTED
+  INACTIVE
+}
+
+enum FurnishingStatus {
+  UNFURNISHED
+  SEMI_FURNISHED
+  FULLY_FURNISHED
+}
+
+enum AmenityCategory {
+  LIFESTYLE
+  FITNESS
+  SECURITY
+  CONVENIENCE
+  INFRASTRUCTURE
+}
+
+enum AnalysisType {
+  INVESTMENT_YIELD
+  ANOMALY_DETECTION
+  VALUATION_ESTIMATE
+  NEIGHBORHOOD_SCORE
+  RISK_ASSESSMENT
+}
+
+// ------------------------------------------------------------------------------
+// Core Entities
+// ------------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  firstName String?
+  lastName  String?
+  phone     String?
+  role      UserRole @default(BUYER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  properties  Property[]      @relation("UserCreatedProperties")
+  preferences UserPreference?
+  favorites   Favorite[]
+  views       PropertyView[]
+
+  @@map("users")
+}
+
+model Property {
+  id           String           @id @default(uuid())
+  title        String
+  description  String           @db.Text
+  propertyType PropertyType
+  listingType  ListingType
+  status       PropertyStatus   @default(AVAILABLE)
+  price        Decimal          @db.Decimal(14, 2)
+  currency     String           @default("USD")
+  areaSqFt     Decimal          @db.Decimal(10, 2)
+  bedrooms     Int
+  bathrooms    Decimal          @db.Decimal(3, 1)
+  furnishing   FurnishingStatus @default(UNFURNISHED)
+  city         String
+  locality     String
+  address      String?
+  zipCode      String?
+  latitude     Decimal?         @db.Decimal(10, 7)
+  longitude    Decimal?         @db.Decimal(10, 7)
+  yearBuilt    Int?
+  createdById  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Relationships
+  createdBy    User?                  @relation("UserCreatedProperties", fields: [createdById], references: [id], onDelete: SetNull)
+  images       PropertyImage[]
+  amenities    PropertyAmenity[]
+  favorites    Favorite[]
+  views        PropertyView[]
+  priceHistory PropertyPriceHistory[]
+  analyses     PropertyAnalysis[]
+
+  @@index([city, locality])
+  @@index([price])
+  @@index([propertyType, listingType, status])
+  @@index([bedrooms, bathrooms])
+  @@index([createdAt])
+  @@map("properties")
+}
+
+model PropertyImage {
+  id           String   @id @default(uuid())
+  propertyId   String
+  url          String
+  caption      String?
+  isPrimary    Boolean  @default(false)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  // Relationships
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_images")
+}
+
+model Amenity {
+  id        String          @id @default(uuid())
+  name      String          @unique
+  slug      String          @unique
+  category  AmenityCategory @default(CONVENIENCE)
+  icon      String?
+  createdAt DateTime        @default(now())
+
+  // Relationships
+  properties PropertyAmenity[]
+
+  @@map("amenities")
+}
+
+model PropertyAmenity {
+  id         String   @id @default(uuid())
+  propertyId String
+  amenityId  String
+  createdAt  DateTime @default(now())
+
+  // Relationships
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenity  Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, amenityId])
+  @@index([propertyId])
+  @@index([amenityId])
+  @@map("property_amenities")
+}
+
+model Favorite {
+  id         String   @id @default(uuid())
+  userId     String
+  propertyId String
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  // Relationships
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@index([userId])
+  @@index([propertyId])
+  @@map("favorites")
+}
+
+model UserPreference {
+  id                    String         @id @default(uuid())
+  userId                String         @unique
+  listingType           ListingType?
+  budgetMin             Decimal?       @db.Decimal(14, 2)
+  budgetMax             Decimal?       @db.Decimal(14, 2)
+  preferredCities       String[]       @default([])
+  preferredLocalities   String[]       @default([])
+  bedrooms              Int[]          @default([])
+  propertyTypes         PropertyType[] @default([])
+  minAreaSqFt           Decimal?       @db.Decimal(10, 2)
+  maxAreaSqFt           Decimal?       @db.Decimal(10, 2)
+  lifestylePreferences  Json?
+  investmentPreferences Json?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model PropertyView {
+  id                  String   @id @default(uuid())
+  propertyId          String
+  userId              String?
+  ipAddress           String?
+  userAgent           String?
+  viewDurationSeconds Int?
+  createdAt           DateTime @default(now())
+
+  // Relationships
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, createdAt])
+  @@index([userId])
+  @@map("property_views")
+}
+
+model PropertyPriceHistory {
+  id               String   @id @default(uuid())
+  propertyId       String
+  previousPrice    Decimal  @db.Decimal(14, 2)
+  newPrice         Decimal  @db.Decimal(14, 2)
+  changePercentage Decimal? @db.Decimal(6, 2)
+  reason           String?
+  effectiveDate    DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  // Relationships
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, effectiveDate])
+  @@map("property_price_histories")
+}
+
+model PropertyAnalysis {
+  id                    String       @id @default(uuid())
+  propertyId            String
+  analysisType          AnalysisType
+  score                 Decimal      @db.Decimal(6, 2)
+  confidenceScore       Decimal?     @db.Decimal(5, 4)
+  isAiEstimated         Boolean      @default(true)
+  isVerified            Boolean      @default(false)
+  modelVersion          String?
+  structuredExplanation Json
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  // Relationships
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, analysisType])
+  @@index([analysisType, score])
+  @@map("property_analyses")
+}

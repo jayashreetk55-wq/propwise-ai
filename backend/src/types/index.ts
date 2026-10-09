@@ -34,6 +34,11 @@ export interface HealthCheckData {
   uptimeSeconds: number;
   uptimeFormatted: string;
   timestamp: string;
+  database: {
+    status: 'connected' | 'disconnected';
+    latencyMs?: number;
+    message?: string;
+  };
   system: {
     nodeVersion: string;
     platform: string;
@@ -44,3 +49,34 @@ export interface HealthCheckData {
     };
   };
 }
+
+export interface AuthUserPayload {
+  id: string;
+  email: string;
+  role: string;
+  name?: string | null;
+}
+
+export interface SafeUser {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  isActive: boolean;
+  createdAt: Date | string;
+  updatedAt?: Date | string;
+}
+
+export interface AuthResponseData {
+  user: SafeUser;
+  token: string;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthUserPayload;
+    }
+  }
+}
+

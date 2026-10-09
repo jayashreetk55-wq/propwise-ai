@@ -25,6 +25,24 @@ const envSchema = z.object({
   SERVICE_NAME: z.string().default('propwise-backend'),
   SERVICE_VERSION: z.string().default('1.0.0'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  DATABASE_URL: z
+    .string()
+    .default('postgresql://postgres:postgres@localhost:5432/propwise_db?schema=public')
+    .refine((val) => val.startsWith('postgresql://') || val.startsWith('postgres://'), {
+      message: 'DATABASE_URL must be a valid PostgreSQL connection string starting with postgresql:// or postgres://',
+    }),
+  JWT_SECRET: z
+    .string()
+    .min(16, 'JWT_SECRET must be at least 16 characters')
+    .default('propwise-default-jwt-secret-key-change-in-production-min32'),
+  JWT_EXPIRES_IN: z.string().default('7d'),
+  BCRYPT_SALT_ROUNDS: z
+    .string()
+    .default('10')
+    .transform((val) => parseInt(val, 10))
+    .refine((val) => !isNaN(val) && val >= 4 && val <= 16, {
+      message: 'BCRYPT_SALT_ROUNDS must be a number between 4 and 16',
+    }),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -37,6 +55,11 @@ if (!parsedEnv.success) {
   throw new Error(`Invalid environment configuration:\n${formattedErrors}`);
 }
 
+// Ensure process.env.DATABASE_URL is set for Prisma Client when .env is absent
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = parsedEnv.data.DATABASE_URL;
+}
+
 export const config = {
   port: parsedEnv.data.PORT,
   nodeEnv: parsedEnv.data.NODE_ENV,
@@ -45,6 +68,10 @@ export const config = {
   serviceName: parsedEnv.data.SERVICE_NAME,
   serviceVersion: parsedEnv.data.SERVICE_VERSION,
   logLevel: parsedEnv.data.LOG_LEVEL,
+  databaseUrl: parsedEnv.data.DATABASE_URL,
+  jwtSecret: parsedEnv.data.JWT_SECRET,
+  jwtExpiresIn: parsedEnv.data.JWT_EXPIRES_IN,
+  bcryptSaltRounds: parsedEnv.data.BCRYPT_SALT_ROUNDS,
   isProduction: parsedEnv.data.NODE_ENV === 'production',
   isDevelopment: parsedEnv.data.NODE_ENV === 'development',
   isTest: parsedEnv.data.NODE_ENV === 'test',

@@ -4,9 +4,9 @@ import { ApiResponseHelper } from '../utils/apiResponse';
 import { HttpStatusCodes } from '../constants/httpStatusCodes';
 
 export class HealthController {
-  getHealth = (_req: Request, res: Response, next: NextFunction): void => {
+  getHealth = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const healthData = healthService.getHealthStatus();
+      const healthData = await healthService.getHealthStatus();
       ApiResponseHelper.success(
         res,
         'PropWise AI backend service is healthy',

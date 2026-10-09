@@ -1,5 +1,6 @@
 import { config } from '../config';
 import { HealthCheckData } from '../types';
+import { checkDatabaseHealth } from '../database';
 
 export class HealthService {
   private formatUptime(seconds: number): string {
@@ -17,9 +18,10 @@ export class HealthService {
     return parts.join(' ');
   }
 
-  getHealthStatus(): HealthCheckData {
+  async getHealthStatus(): Promise<HealthCheckData> {
     const uptimeSeconds = Math.floor(process.uptime());
     const mem = process.memoryUsage();
+    const database = await checkDatabaseHealth();
 
     return {
       status: 'healthy',
@@ -29,6 +31,7 @@ export class HealthService {
       uptimeSeconds,
       uptimeFormatted: this.formatUptime(uptimeSeconds),
       timestamp: new Date().toISOString(),
+      database,
       system: {
         nodeVersion: process.version,
         platform: process.platform,
